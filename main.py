@@ -5,6 +5,7 @@
 
 import srcomapi, srcomapi.datatypes as dt
 import discord
+import embeds
 from discord.ext import tasks, commands
 from discord.utils import get
 from webserver import keep_alive
@@ -20,10 +21,45 @@ def TestForAdvancedCommand(messagePar, checkPar):
     if checkPar.lower() in messagePar.lower(): return True
     
     return False
+
+def ConvertStringToTime(strPar):
+    parFloat = float(strPar)
+    rest = round(parFloat % 60, 2)
+    minutes = int(round((parFloat - rest) / 60, 0))
+    hours = 0
+    returnString0 = ""
+    returnString1 = ""
+    returnString2 = ""
+    if minutes > 59:
+        while minutes > 59:
+            minutes -= 60
+            hours += 1
+        returnString0 = str(hours) + ":"
+
+    if minutes < 10: returnString1 = "0" + str(minutes)
+    else: returnString1 = "" + str(minutes)
+    
+    if rest < 10: returnString2 = ":0" + str(rest)
+    else: returnString2 = ":" + str(rest)
+        
+    if rest * 100 % 10 == 0: return (returnString0 + returnString1 + returnString2 + "00")
+    else: return (returnString0 + returnString1 + returnString2 + "0")
     
 
 
 #=========Important Variables=========
+
+api = srcomapi.SpeedrunCom(); api.debug = 1
+
+listLimit = 30
+categoryChoices = ["Any% NMG", "Any%", "Alt Ending", "All Collectibles", "No Shortcuts"]
+bossChoices = ["Splitty", "Mr D.A.N.C.E", "Mama Squid", "Helpy", "Bartender", "Squid 1", "Squid 2"]
+difficultyChoices = ["IE", "EE", "VE", "Easy"]
+typingCategoryChoices = ["Any%NMG", "Any%", "AltEnding", "AllCollectibles", "NoShortcuts"]
+typingBossChoices = ["Splitty", "MrDance", "MamaSquid", "Helpy", "Bartender", "Squid1", "Squid2"]
+typingChapterChoices = ["ChapterA", "ChapterB", "ChapterC", "ChapterD", "ChapterE"]
+typingOtherExtChoices = ["ChapterRelay", "Iaf", "DoubleTime", "Death%", "BlockMassacre", "MinimumKills"]
+
 
 viableCommandChannels = ['bot-commands']
 
@@ -52,6 +88,7 @@ activeBotStatus = 0
 currentTemporaryVoiceChannels = [0]
 currentTemporaryVoiceChannelLeader = [0]
 lastTemporaryVoiceChannelRenames = [0]
+
 #=========Discord Client=========
 
 
@@ -70,7 +107,7 @@ class MyClient(discord.Client):
         print(memberRole)
         self.Change_Status.start()
         
-    @tasks.loop(seconds=30.0)
+    @tasks.loop(seconds=60.0)
     async def Change_Status(self):
         global activeBotStatus
         await self.change_presence(activity=discord.Game(name=listOfBotStatus[activeBotStatus]))
@@ -173,13 +210,6 @@ class MyClient(discord.Client):
         
         if str(message.author) not in nicePeopleArray and not str(message.channel.name) in viableCommandChannels: return #when the author isn't included in the Array nothing happens
 
-
-        if str(prefix + 'test') in messageStr.lower():
-            theId = int(messageStr.replace(str(prefix + 'test'), ""))
-            print(theId)
-            theChannel = client.get_channel(theId)
-            print(theChannel)
-            
             
         if str(prefix + 'reaction') in messageStr.lower():
             if str(message.author) not in godDamnNicePeopleArray: return
@@ -279,16 +309,201 @@ class MyClient(discord.Client):
         #===Help Command (m!Help)==
 
         if TestForAdvancedCommand(messageStr, str(prefix + 'help')): 
-            embed = discord.Embed(
-            title = 'Help',
-            description = 'This is a list of the commands: \n ',
-            colour = discord.Colour.blue()
-            )
-            #embed.add_field(name='m!src X', value='Shows top X runs.', inline=True)
-            #embed.set_thumbnail(url='https://www.speedrun.com/themeasset/2woqj208/logo?v=ae9623c')
-            await message.channel.send(embed=embed)
+            await message.channel.send(embed=embeds.help_embed_1)
+            await message.channel.send(embed=embeds.help_embed_2)
         
+        if TestForAdvancedCommand(messageStr, prefix + 'wys') or TestForAdvancedCommand(messageStr, prefix + 'willyousnail'):
 
+            #Try to get the Category and the Difficulty -->
+
+            tempCategory = None #Is a string
+        
+            for cateCommand in typingCategoryChoices:
+                if TestForAdvancedCommand(messageStr, cateCommand) and tempCategory == None:
+                    tempCategory = categoryChoices[typingCategoryChoices.index(cateCommand)]
+        
+            typeOfCategory = 'Category' #Default Value = Category
+            minusCommandSplitter = 0
+
+
+            if tempCategory == None: #Test for ILs (Chapters)
+                for chapterCommand in typingChapterChoices:
+                    if TestForAdvancedCommand(messageStr, chapterCommand) and tempCategory == None:
+                        tempCategory = chapterCommand
+                        typeOfCategory = 'Chapter'
+
+            if tempCategory == None: #Test for Other Extensions
+                for otherExtCommand in typingOtherExtChoices:
+                    if TestForAdvancedCommand(messageStr, otherExtCommand) and tempCategory == None:
+                        tempCategory = otherExtCommand
+                        typeOfCategory = 'OtherExtension'
+                     
+            if tempCategory == None: #It should be a Boss, 100% or a typo
+                if '100%' in messageStr:  #It's 100%
+                    tempCategory = '100%'
+                    typeOfCategory = '100%'
+                    minusCommandSplitter = 1
+                else:
+                    for bossCommand in typingBossChoices:
+                        if TestForAdvancedCommand(messageStr, bossCommand) and tempCategory == None:
+                            tempCategory = bossChoices[typingBossChoices.index(bossCommand)]
+                            typeOfCategory = 'Boss'
+                
+                
+            tempDifficulty = None #Is an integer
+        
+            if typeOfCategory != '100%':
+                for diffCommand in difficultyChoices:
+                    if TestForAdvancedCommand(messageStr, diffCommand) and tempDifficulty == None:
+                        tempDifficulty = difficultyChoices.index(diffCommand)
+          
+            if tempCategory == None: 
+                await message.channel.send("Please specify the catagory!")
+                return
+
+            await message.channel.send("Loading...")
+            theLeaderboard = None
+            cateString = ""
+            searchApi = api.search(srcomapi.datatypes.Game, {"name": "Will You Snail?"})
+            game = searchApi[0]
+            cates = game.categories  
+            levels = game.levels
+            try:                                                    #Now try to get the Leaderboard from the right category -->
+                if typeOfCategory == 'Category':
+                    categoryInt = categoryChoices.index(tempCategory)
+                    if categoryInt == 4: categoryInt = 10
+                    cate = cates[categoryInt]
+                    difficultyVar = cate.variables[0] 
+                    cateString = "leaderboards/{}/category/{}?var-{}={}".format(game.id, cate.id, difficultyVar.id, list(difficultyVar.data["values"]["choices"].keys())[tempDifficulty])
+                elif typeOfCategory == 'Boss':
+                    cate = cates[9]
+                    bossVar = cate.variables[1]
+                    difficultyVar = cate.variables[0]
+                    cateString = "leaderboards/{}/category/{}?var-{}={}&var-{}={}".format(game.id, cate.id, difficultyVar.id, list(difficultyVar.data["values"]["choices"].keys())[tempDifficulty], bossVar.id, list(bossVar.data["values"]["choices"].keys())[bossChoices.index(tempCategory)])
+                elif typeOfCategory == '100%':
+                    cate = cates[8]
+                    cateString = "leaderboards/{}/category/{}".format(game.id, cate.id)
+                elif typeOfCategory == 'Chapter':
+                    difficultyVar = cates[tempDifficulty+4]
+                    level = levels[typingChapterChoices.index(tempCategory)]  
+                    cateVar = difficultyVar.variables[0]
+                    cateString = "leaderboards/{}/level/{}/{}?var-{}={}".format(game.id, level.id, difficultyVar.id, cateVar.id, list(cateVar.data["values"]["choices"].keys())[0]) #This number at the end controls Any% or AllPuzzles
+                elif typeOfCategory == 'OtherExtension':
+                    game3 = searchApi[3]
+                    cates3 = game3.categories
+                    if typingOtherExtChoices.index(tempCategory) == 1:
+                        iafArray = ["2", "25", "50", "75", "100", "1000"]
+                        iafIndex = ""
+                        for iafValue in iafArray:
+                            if typingOtherExtChoices[1].lower() + iafValue in messageStr.lower():
+                                iafIndex = iafValue
+                        cate = cates3[1]
+                        levelVar = cate.variables[0]
+                        cateString = "leaderboards/{}/category/{}?var-{}={}".format(game3.id, cate.id, levelVar.id, list(levelVar.data["values"]["choices"].keys())[iafArray.index(iafIndex)])
+                        minusCommandSplitter = 1
+                    elif typingOtherExtChoices.index(tempCategory) == 3:
+                        cate = cates3[3]
+                        cateString = "leaderboards/{}/category/{}".format(game3.id, cate.id)
+                        minusCommandSplitter = 1
+                    else: 
+                        cate = cates3[typingOtherExtChoices.index(tempCategory)]
+                        difficultyVar = cate.variables[0]
+                        cateString = "leaderboards/{}/category/{}?var-{}={}".format(game3.id, cate.id, difficultyVar.id, list(difficultyVar.data["values"]["choices"].keys())[tempDifficulty])
+
+                theLeaderboard = dt.Leaderboard(api, data=api.get(cateString))
+
+                                                                    #Try to display the Leaderboard --> 
+
+                if minusCommandSplitter == 1 and tempDifficulty != None:
+                    await message.channel.send("This category hasn't a difficulty!")
+                    return
+
+                try:
+                    tempNumbers = messageStr.replace(prefix, '').split(' ')[3 - minusCommandSplitter] 
+                    if '-' in messageStr: #Command option 1: X-Y
+                        try:
+                            tempNumber1 = int(tempNumbers.split('-')[0])
+                            tempNumber2 = int(tempNumbers.split('-')[1])
+                        except Exception as e:
+                            await message.channel.send("Please enter a valid number!")
+                            return
+
+                        if tempNumber2 > len(theLeaderboard.runs):
+                            if len(theLeaderboard.runs) == 1:
+                                await message.channel.send("This Leaderboard has only " + str(len(theLeaderboard.runs)) +  " entry!")
+                            else:
+                                await message.channel.send("This Leaderboard has only " + str(len(theLeaderboard.runs)) +  " entries!")
+                            return
+                    
+                        if tempNumber2 - tempNumber1 >= 30:
+                            await message.channel.send("Leaderboard index should be 30 or lower!")
+                            return
+                        elif tempNumber2 - tempNumber1 < 0:
+                            await message.channel.send("Leaderboard index should be 1 or higher!")
+                            return
+                    
+                        _complString = "The " + str(tempCategory) + " Leaderboard: \n"
+                        for i in range(tempNumber1, tempNumber2 + 1):
+                            _names = theLeaderboard.runs[i - 1]['run'].players
+                            _time = ConvertStringToTime(float(theLeaderboard.runs[i - 1]['run'].times["primary_t"]))
+                            _complString = _complString + str(i) + ". **" + str(_time) + "** by **" + str(_names[0].name) + "**"
+                            arrayCount = 0
+                            if len(_names) > 1:
+                                for pla in _names:
+                                    if arrayCount > 0:
+                                        _complString = _complString + " and **" + pla.name + "**"
+                                    arrayCount += 1
+
+                            _complString = _complString + "\n"
+
+                        
+                        await message.channel.send(_complString)   
+                        
+                    else:               #Command option 2: X
+                        try:
+                            tempNumber1 = int(tempNumbers)
+                        except Exception as e:
+                            await message.channel.send("Please enter a valid number!")
+                            return
+
+                        if tempNumber1 > len(theLeaderboard.runs):
+                            if len(theLeaderboard.runs) == 1:
+                                await message.channel.send("This Leaderboard has only " + str(len(theLeaderboard.runs)) +  " entry!")
+                            else:
+                                await message.channel.send("This Leaderboard has only " + str(len(theLeaderboard.runs)) +  " entries!")
+                            return
+                
+                        if tempNumber1 > 30:
+                            await message.channel.send("Leaderboard index should be 30 or lower!")
+                            return
+                        elif tempNumber1 == 0:
+                            await message.channel.send("The Leaderboard doesn't exist anymore! :(") #FlippyDolphin's Easter Egg
+                            return 
+                    
+                        _complString = "The " + str(tempCategory) + " Leaderboard: \n"
+                        for i in range(1, tempNumber1 + 1):
+                            _names = theLeaderboard.runs[i - 1]['run'].players
+                            _time = ConvertStringToTime(float(theLeaderboard.runs[i - 1]['run'].times["primary_t"]))
+                            _complString = _complString + str(i) + ". **" + str(_time) + "** by **" + str(_names[0].name) + "**"
+                            arrayCount = 0
+                            if len(_names) > 1:
+                                for pla in _names:
+                                    if arrayCount > 0:
+                                        _complString = _complString + " and **" + pla.name + "**"
+                                    arrayCount += 1
+
+                            _complString = _complString + "\n"
+                    
+                        await message.channel.send(_complString)   
+                except Exception as e:
+                    await message.channel.send("Please enter the number of runs you'd like display!")
+            except Exception as e:
+                await message.channel.send("Please specify the difficulty!")
+            a = 0
+            async for data in message.channel.history(limit=2):
+                if a == 1:
+                    await data.delete()
+                a += 1
 
     
     #===Reaction Add===
