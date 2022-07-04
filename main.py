@@ -68,11 +68,11 @@ intents = discord.Intents.all()
 discord.member = True
 client = commands.Bot(command_prefix="m!",intents = intents)
                             
-activeGuildId = 988336667146481725 
-categoryOfVoiceChannelsID = 989190438898532422
-createVoiceChannelVCID = 988336667591073843
-memberRoleID = 988497403571228724
-welcomeChannelID = 988690177071390761
+activeGuildId = 993513566550360169 
+categoryOfVoiceChannelsID = 993513567867387904
+createVoiceChannelVCID = 993513567867387906
+memberRoleID = 993518002614050826
+welcomeChannelID = 993516308027146271
 welcomeChannel = None
 
 theGuild = None
@@ -208,7 +208,7 @@ class MyClient(discord.Client):
                 
         
         
-        if str(message.author) not in nicePeopleArray and not str(message.channel.name) in viableCommandChannels: return #when the author isn't included in the Array nothing happens
+        if str(message.author) not in nicePeopleArray and not "bot-commands" in str(message.channel.name): return #when the author isn't included in the Array nothing happens
 
             
         if str(prefix + 'reaction') in messageStr.lower():
