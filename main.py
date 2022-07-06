@@ -251,16 +251,16 @@ class MyClient(discord.Client):
             
             
             
-        #===Clear Command (m!clear X)===
+        #===Clear Command (m!delete X)===
 
-        if str(prefix + 'clear') in messageStr.lower():
+        if str(prefix + 'delete') in messageStr.lower():
             if str(message.author) not in godDamnNicePeopleArray: return 
             try:
-                async for m in message.channel.history(limit=1 + int(messageStr.replace(str(prefix + 'clear '), ''))):
+                async for m in message.channel.history(limit=1 + int(messageStr.replace(str(prefix + 'delete '), ''))):
                     await m.delete()
                 return
             except:
-                print('m!clear Error!')
+                print('m!delete Error!')
 
 
 
